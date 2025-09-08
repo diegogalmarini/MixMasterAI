@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MixMasterAI</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+        background-color: #111827; /* gray-900 */
+        overscroll-behavior: contain; /* Prevents pull-to-refresh & scroll chaining */
+    }
+    /* For custom scrollbar aesthetics */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #1F2937; /* gray-800 */
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #FBBF24; /* amber-400 */
+      border-radius: 10px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #F59E0B; /* amber-500 */
+    }
+    /* Toast Animation */
+    @keyframes fadeInOut {
+      0%, 100% { opacity: 0; transform: translateY(1rem); }
+      10%, 90% { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in-out {
+      animation: fadeInOut 3s ease-in-out forwards;
+    }
+  </style>
+<script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.1.1/",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.16.0",
+    "react/": "https://aistudiocdn.com/react@^19.1.1/",
+    "react": "https://aistudiocdn.com/react@^19.1.1",
+    "jspdf": "https://aistudiocdn.com/jspdf@^2.5.1",
+    "pako": "https://aistudiocdn.com/pako@^2.1.0"
+  }
+}
+</script>
+</head>
+<body class="text-slate-200 antialiased">
+  <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>
