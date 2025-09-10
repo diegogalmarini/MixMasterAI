@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import type { Cocktail, ImageState } from './types';
 import { generateCocktails, generateCocktailImage, identifyIngredientsFromImage, translateCocktail, saveSharedCocktail, getSharedCocktail } from './services/geminiService';
@@ -259,6 +260,7 @@ const App: React.FC = () => {
                             r.id === cocktail.id ? { ...r, imageUrl, imageState: 'success' as const } : r
                         )
                     );
+                    await new Promise(resolve => setTimeout(resolve, 2000)); // Pause for 2 seconds
                 } catch (imgErr) {
                     if (imgErr instanceof Error) {
                         if (imgErr.message === "QUOTA_EXCEEDED") {
