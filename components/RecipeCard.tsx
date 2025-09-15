@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import type { Cocktail, ImageState } from '../types';
 import jsPDF from 'jspdf';
@@ -23,6 +24,8 @@ const localeStrings = {
         shareCocktail: 'Share cocktail',
         downloadPdf: 'Download PDF',
         difficulty: 'Difficulty',
+        generateImagePrompt: 'Visualize this cocktail.',
+        generateImageButton: 'Generate Image'
     },
     es: {
         imageFailed: "Falló la generación de imagen.",
@@ -43,6 +46,8 @@ const localeStrings = {
         shareCocktail: 'Compartir cóctel',
         downloadPdf: 'Descargar PDF',
         difficulty: 'Dificultad',
+        generateImagePrompt: 'Visualiza este cóctel.',
+        generateImageButton: 'Generar Imagen'
     }
 };
 
@@ -60,7 +65,7 @@ const ImagePlaceholder = ({ state, language }: { state: ImageState | undefined, 
                 <p className="text-sm font-semibold text-slate-400">{message}</p>
             </div>
         );
-    } else {
+    } else { // 'loading'
         content = (
              <div className="flex flex-col items-center justify-center text-center p-4 h-full">
                 <svg className="animate-spin h-8 w-8 text-slate-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -110,9 +115,10 @@ interface CocktailCardProps {
     onToggleFavorite: (cocktail: Cocktail) => void;
     isFavorite: boolean;
     onShare: (cocktail: Cocktail) => void;
+    onGenerateImage: (id: string) => void;
 }
 
-const CocktailCard: React.FC<CocktailCardProps> = ({ cocktail, language, onToggleFavorite, isFavorite, onShare }) => {
+const CocktailCard: React.FC<CocktailCardProps> = ({ cocktail, language, onToggleFavorite, isFavorite, onShare, onGenerateImage }) => {
     const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
     const t = localeStrings[language];
     
@@ -331,14 +337,39 @@ const CocktailCard: React.FC<CocktailCardProps> = ({ cocktail, language, onToggl
             setIsDownloadingPdf(false);
         }
     };
+    
+    const renderImageArea = () => {
+        switch (cocktail.imageState) {
+            case 'success':
+                return cocktail.imageUrl ? (
+                     <img src={cocktail.imageUrl} alt={cocktail.cocktailName} className="w-full h-64 md:h-80 object-cover" />
+                ) : null;
+            case 'loading':
+            case 'error':
+            case 'error_quota':
+                return <ImagePlaceholder state={cocktail.imageState} language={language} />;
+            default:
+                return (
+                    <div className="w-full aspect-[16/9] bg-gray-700/50 border-2 border-dashed border-gray-600 rounded-t-2xl flex flex-col items-center justify-center p-4 text-center">
+                        <p className="text-slate-300 mb-4">{t.generateImagePrompt}</p>
+                        <button 
+                            onClick={() => onGenerateImage(cocktail.id)}
+                            className="bg-amber-400 hover:bg-amber-500 text-black font-bold py-2 px-5 rounded-lg transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-amber-500/50 flex items-center gap-2"
+                        >
+                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" />
+                            </svg>
+                            {t.generateImageButton}
+                        </button>
+                    </div>
+                );
+        }
+    };
+
 
     return (
         <div className="bg-gray-800 rounded-2xl shadow-xl overflow-hidden border border-gray-700">
-            {cocktail.imageState === 'success' && cocktail.imageUrl ? (
-                <img src={cocktail.imageUrl} alt={cocktail.cocktailName} className="w-full h-64 md:h-80 object-cover" />
-            ) : (
-                <ImagePlaceholder state={cocktail.imageState} language={language} />
-            )}
+            {renderImageArea()}
             
             <div className="p-6 md:p-8">
                 <h3 className="text-2xl sm:text-3xl font-extrabold text-white">{cocktail.cocktailName}</h3>

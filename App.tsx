@@ -28,7 +28,6 @@ const locales = {
         errorOffline: "You appear to be offline. Please check your internet connection.",
         errorSharedCocktailNotFound: "The shared cocktail could not be found or has expired.",
         loadingCocktails: "Crafting cocktails...",
-        loadingImages: "Garnishing your drink...",
         myFavoriteCocktails: "My Favorite Cocktails",
         scanning: "Scanning...",
         linkCopied: "Link copied to clipboard!",
@@ -55,7 +54,6 @@ const locales = {
         errorOffline: "Parece que no tienes conexión. Por favor, revisa tu conexión a internet.",
         errorSharedCocktailNotFound: "El cóctel compartido no se pudo encontrar o ha expirado.",
         loadingCocktails: "Creando cócteles...",
-        loadingImages: "Adornando tu bebida...",
         myFavoriteCocktails: "Mis Cócteles Favoritos",
         scanning: "Escaneando...",
         linkCopied: "¡Enlace copiado al portapapeles!",
@@ -111,7 +109,6 @@ const App: React.FC = () => {
         }
     });
     const [isLoading, setIsLoading] = useState<boolean>(false);
-    const [loadingMessage, setLoadingMessage] = useState<string>('');
     const [error, setError] = useState<string | null>(null);
     const [language, setLanguage] = useState<'en' | 'es'>('es');
     const [sharedCocktail, setSharedCocktail] = useState<Cocktail | null>(null);
@@ -198,7 +195,7 @@ const App: React.FC = () => {
     
         translateAllCocktails();
         prevLangRef.current = language;
-    }, [language]);
+    }, [language, cocktails, favoriteCocktails, sharedCocktail]);
 
 
     const handleAddIngredient = (ingredient: string) => {
@@ -243,54 +240,12 @@ const App: React.FC = () => {
             return;
         }
         setIsLoading(true);
-        setLoadingMessage(t.loadingCocktails);
         setError(null);
         setCocktails([]);
         try {
             const generated = await generateCocktails(ingredients, language);
-            const cocktailsWithIds = generated.map(r => ({ ...r, id: `cocktail-${Date.now()}-${Math.random()}`, imageState: 'loading' as ImageState }));
+            const cocktailsWithIds = generated.map(r => ({ ...r, id: `cocktail-${Date.now()}-${Math.random()}`}));
             setCocktails(cocktailsWithIds);
-            setLoadingMessage(t.loadingImages);
-
-            for (const cocktail of cocktailsWithIds) {
-                try {
-                    const imageUrl = await generateCocktailImage(cocktail);
-                    setCocktails(currentCocktails =>
-                        currentCocktails.map(r =>
-                            r.id === cocktail.id ? { ...r, imageUrl, imageState: 'success' as const } : r
-                        )
-                    );
-                    await new Promise(resolve => setTimeout(resolve, 2000)); // Pause for 2 seconds
-                } catch (imgErr) {
-                    if (imgErr instanceof Error) {
-                        if (imgErr.message === "QUOTA_EXCEEDED") {
-                            setError(t.errorQuotaExceeded);
-                            setCocktails(current => current.map(r =>
-                                r.imageState === 'loading' ? { ...r, imageState: 'error_quota' as const } : r
-                            ));
-                            break; 
-                        } 
-                        if (imgErr.message === 'API_KEY_INVALID') {
-                            setError(t.errorApiKey);
-                            setCocktails(current => current.map(r => r.imageState === 'loading' ? { ...r, imageState: 'error' as const } : r));
-                            break;
-                        }
-                        
-                        console.error(`Failed to generate image for "${cocktail.cocktailName}":`, imgErr);
-                        setError(t.errorImageGeneration);
-                        setCocktails(currentCocktails =>
-                            currentCocktails.map(r =>
-                                r.id === cocktail.id ? { ...r, imageState: 'error' as const } : r
-                            )
-                        );
-                    } else {
-                        console.error(`An unknown error occurred while generating image for "${cocktail.cocktailName}":`, imgErr);
-                        setError(t.errorContent);
-                        setCocktails(current => current.map(r => r.imageState === 'loading' ? { ...r, imageState: 'error' as const } : r));
-                        break;
-                    }
-                }
-            }
         } catch (err) {
             if (err instanceof Error) {
                 switch(err.message) {
@@ -310,6 +265,55 @@ const App: React.FC = () => {
             setIsLoading(false);
         }
     }, [ingredients, language, t]);
+
+    const handleGenerateSingleImage = useCallback(async (cocktailId: string) => {
+        const findAndSetState = (list: Cocktail[], setter: React.Dispatch<React.SetStateAction<Cocktail[]>>, id: string, newState: Partial<Cocktail>) => {
+            setter(current => current.map(c => c.id === id ? { ...c, ...newState } : c));
+        };
+    
+        const findCocktail = (lists: Cocktail[][]) => {
+            for (const list of lists) {
+                const found = list.find(c => c.id === cocktailId);
+                if (found) return found;
+            }
+            return null;
+        };
+    
+        const getSetter = (cocktail: Cocktail): React.Dispatch<React.SetStateAction<Cocktail[]>> | null => {
+            if (cocktails.some(c => c.id === cocktail.id)) return setCocktails;
+            if (favoriteCocktails.some(c => c.id === cocktail.id)) return setFavoriteCocktails;
+            return null;
+        };
+    
+        const cocktailToUpdate = findCocktail([cocktails, favoriteCocktails]);
+        if (!cocktailToUpdate) return;
+    
+        const setter = getSetter(cocktailToUpdate);
+        if (!setter) return;
+    
+        findAndSetState([cocktailToUpdate], setter, cocktailId, { imageState: 'loading' });
+        setError(null);
+    
+        try {
+            const imageUrl = await generateCocktailImage(cocktailToUpdate);
+            findAndSetState([cocktailToUpdate], setter, cocktailId, { imageUrl, imageState: 'success' });
+        } catch (imgErr) {
+            let errorState: ImageState = 'error';
+            if (imgErr instanceof Error) {
+                if (imgErr.message === "QUOTA_EXCEEDED") {
+                    setError(t.errorQuotaExceeded);
+                    errorState = 'error_quota';
+                } else if (imgErr.message === 'API_KEY_INVALID') {
+                    setError(t.errorApiKey);
+                } else {
+                    setError(t.errorImageGeneration);
+                }
+            } else {
+                 setError(t.errorContent);
+            }
+            findAndSetState([cocktailToUpdate], setter, cocktailId, { imageState: errorState });
+        }
+    }, [cocktails, favoriteCocktails, t]);
 
     const handleScanRequest = () => {
         fileInputRef.current?.click();
@@ -391,7 +395,7 @@ const App: React.FC = () => {
                     {isLoading ? (
                         <>
                             <Spinner />
-                            {loadingMessage || t.generating}
+                            {t.generating}
                         </>
                     ) : t.generate}
                 </button>
@@ -426,6 +430,7 @@ const App: React.FC = () => {
                       onToggleFavorite={handleToggleFavorite}
                       isFavorite={favoriteCocktails.some(fav => fav.id === cocktail.id)}
                       onShare={handleShareCocktail}
+                      onGenerateImage={handleGenerateSingleImage}
                     />
                 ))}
             </div>
@@ -442,6 +447,7 @@ const App: React.FC = () => {
                                 onToggleFavorite={handleToggleFavorite}
                                 isFavorite={true}
                                 onShare={handleShareCocktail}
+                                onGenerateImage={handleGenerateSingleImage}
                             />
                         ))}
                     </div>
@@ -461,6 +467,7 @@ const App: React.FC = () => {
                     onToggleFavorite={handleToggleFavorite}
                     isFavorite={favoriteCocktails.some(fav => fav.id === sharedCocktail.id)}
                     onShare={handleShareCocktail}
+                    onGenerateImage={handleGenerateSingleImage}
                  />}
             </div>
              <div className="text-center mt-12">
@@ -506,21 +513,33 @@ const App: React.FC = () => {
                             <p className="text-md text-slate-300">{t.subtitle}</p>
                         </div>
                     </div>
-                    <div className="flex gap-1 bg-gray-900/50 rounded-full p-1">
-                        <button
-                            onClick={() => setLanguage('es')}
-                            className={`px-3 py-1 text-sm font-semibold rounded-full transition-colors ${language === 'es' ? 'bg-amber-400 text-black' : 'text-slate-200 hover:bg-gray-700/80'}`}
-                            aria-label="Cambiar a Español"
-                        >
-                            ES
-                        </button>
-                        <button
-                            onClick={() => setLanguage('en')}
-                            className={`px-3 py-1 text-sm font-semibold rounded-full transition-colors ${language === 'en' ? 'bg-amber-400 text-black' : 'text-slate-200 hover:bg-gray-700/80'}`}
-                            aria-label="Switch to English"
-                        >
-                            EN
-                        </button>
+                    <div className="flex items-center gap-4">
+                        <div className="flex gap-1 bg-gray-900/50 rounded-full p-1">
+                            <button
+                                onClick={() => setLanguage('es')}
+                                className={`px-3 py-1 text-sm font-semibold rounded-full transition-colors ${language === 'es' ? 'bg-amber-400 text-black' : 'text-slate-200 hover:bg-gray-700/80'}`}
+                                aria-label="Cambiar a Español"
+                            >
+                                ES
+                            </button>
+                            <button
+                                onClick={() => setLanguage('en')}
+                                className={`px-3 py-1 text-sm font-semibold rounded-full transition-colors ${language === 'en' ? 'bg-amber-400 text-black' : 'text-slate-200 hover:bg-gray-700/80'}`}
+                                aria-label="Switch to English"
+                            >
+                                EN
+                            </button>
+                        </div>
+                         <a href="https://github.com/diegogalmarini/MixMasterAI" target="_blank" rel="noopener noreferrer" aria-label="GitHub Repository" title="GitHub Repository">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-slate-300 hover:text-white transition-colors" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
+                            </svg>
+                        </a>
+                        <a href="https://ai.studio/apps/drive/1CzR2_9MZUkGKrbxV78m4Tz1Cq0CY_D4V" target="_blank" rel="noopener noreferrer" aria-label="Open in AI Studio" title="Open in AI Studio">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 text-slate-300 hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.898 20.562L16.25 22.5l-.648-1.938a3.375 3.375 0 00-2.684-2.684L11.25 18l1.938-.648a3.375 3.375 0 002.684-2.684L16.25 13l.648 1.938a3.375 3.375 0 002.684 2.684L21.5 18l-1.938.648a3.375 3.375 0 00-2.684 2.684z" />
+                            </svg>
+                        </a>
                     </div>
                 </header>
             </div>
